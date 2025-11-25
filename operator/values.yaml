@@ -1,14 +1,43 @@
-replicaCount: 1
-
-monitoring:
-  enabled: true
-  podMonitor:
-    enabled: true
-
-resources:
-  limits:
-    cpu: 500m
-    memory: 512Mi
-  requests:
-    cpu: 100m
-    memory: 128Mi
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: postgres-operator
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  
+  source:
+    repoURL: https://cloudnative-pg.github.io/charts
+    targetRevision: 1.27.1  
+    chart: cloudnative-pg   
+    
+    # Values để override
+    helm:
+      values: |
+        replicaCount: 1
+        
+        monitoring:
+          enabled: true
+          podMonitor:
+            enabled: true
+        
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: postgres-operator
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
