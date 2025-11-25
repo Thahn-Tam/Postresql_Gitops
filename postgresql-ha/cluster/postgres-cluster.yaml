@@ -1,0 +1,130 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres-ha
+  namespace: postgres
+spec:
+  # HA: 3 instances (1 primary + 2 replicas)
+  instances: 3
+  
+  # PostgreSQL version
+  imageName: ghcr.io/cloudnative-pg/postgresql:16.1
+  
+  # Bootstrap
+  bootstrap:
+    initdb:
+      database: app
+      owner: app
+      secret:
+        name: app-db-user
+      
+      # Tạo thêm databases cho Harbor
+      postInitSQL:
+        - CREATE DATABASE harbor OWNER harbor;
+        - CREATE DATABASE notary_server OWNER harbor;
+        - CREATE DATABASE notary_signer OWNER harbor;
+  
+  # Superuser credentials
+  superuserSecret:
+    name: postgres-superuser
+  
+  # Storage - test size
+  storage:
+    storageClass: standard-rwo  # Hoặc premium-rwo cho performance
+    size: 5Gi  # Test: 5Gi, Production: 100Gi+
+  
+  # WAL Storage riêng (best practice)
+  walStorage:
+    storageClass: standard-rwo
+    size: 1Gi  # Test: 1Gi, Production: 20Gi+
+  
+  # Resources - giảm cho test
+  resources:
+    requests:
+      memory: "512Mi"   # Production: 2-4Gi
+      cpu: "500m"       # Production: 1-2 cores
+    limits:
+      memory: "1Gi"     # Production: 4-8Gi
+      cpu: "1000m"      # Production: 2-4 cores
+  
+  # Monitoring
+  monitoring:
+    enablePodMonitor: true
+  
+  # PostgreSQL Configuration
+  postgresql:
+    parameters:
+      # Connection settings
+      max_connections: "200"          # Production: 300-500
+      
+      # Memory settings (based on allocated resources)
+      shared_buffers: "256MB"         # Production: 25% of RAM
+      effective_cache_size: "512MB"   # Production: 75% of RAM
+      work_mem: "4MB"                 # Production: 8-16MB
+      maintenance_work_mem: "64MB"    # Production: 256MB-1GB
+      
+      # WAL settings
+      wal_level: replica
+      max_wal_senders: "10"
+      max_replication_slots: "10"
+      wal_keep_size: "512MB"
+      
+      # Replication
+      hot_standby: "on"
+      hot_standby_feedback: "on"
+      
+      # Performance tuning for SSD
+      random_page_cost: "1.1"
+      effective_io_concurrency: "200"
+      
+      # Logging (best practice)
+      log_destination: "stderr"
+      logging_collector: "on"
+      log_min_duration_statement: "1000"  # Log queries > 1s
+      log_line_prefix: "%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h "
+      log_checkpoints: "on"
+      log_connections: "on"
+      log_disconnections: "on"
+      log_lock_waits: "on"
+      
+      # Autovacuum (best practice)
+      autovacuum: "on"
+      autovacuum_max_workers: "3"
+      
+      # Timezone
+      timezone: "Asia/Ho_Chi_Minh"
+  
+  # High Availability Configuration
+  minSyncReplicas: 1    # Đảm bảo ít nhất 1 replica sync
+  maxSyncReplicas: 1    # Tối đa 1 replica sync
+  
+  # Anti-affinity: spread pods across nodes
+  affinity:
+    enablePodAntiAffinity: true
+    topologyKey: kubernetes.io/hostname
+    podAntiAffinityType: preferred  # Production: required
+  
+  # Failover settings
+  failoverDelay: 0           # Failover ngay khi phát hiện
+  switchoverDelay: 60        # Đợi 60s cho switchover
+  
+  # Primary update strategy
+  primaryUpdateStrategy: unsupervised
+  
+  # Managed roles (best practice)
+  managed:
+    roles:
+      - name: harbor
+        ensure: present
+        login: true
+        superuser: false
+        createdb: true
+        createrole: false
+        inherit: true
+      - name: app
+        ensure: present
+        login: true
+        superuser: false
+        createdb: true
+        createrole: false
+        inherit: true

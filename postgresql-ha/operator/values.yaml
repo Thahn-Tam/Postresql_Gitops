@@ -1,0 +1,14 @@
+replicaCount: 1
+
+monitoring:
+  enabled: true
+  podMonitor:
+    enabled: true
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi

@@ -1,0 +1,92 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Pooler
+metadata:
+  name: postgres-pooler-rw
+  namespace: postgres
+spec:
+  cluster:
+    name: postgres-ha
+  
+  # Connection pooler instances (HA)
+  instances: 2
+  
+  # Read-Write pooler
+  type: rw
+  
+  # PgBouncer configuration
+  pgbouncer:
+    poolMode: transaction  # Best for web apps
+    
+    parameters:
+      max_client_conn: "50"      # Production: 1000+
+      default_pool_size: "25"     # Per database
+      reserve_pool_size: "5"
+      min_pool_size: "5"
+      max_db_connections: "20"    # Per database max
+      
+      # Timeouts
+      server_idle_timeout: "600"
+      server_lifetime: "3600"
+      
+      # Logging
+      log_connections: "1"
+      log_disconnections: "1"
+  
+  # Pod template
+  template:
+    metadata:
+      labels:
+        app: postgres-pooler
+        type: rw
+    spec:
+      containers:
+        - name: pgbouncer
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Pooler
+metadata:
+  name: postgres-pooler-ro
+  namespace: postgres
+spec:
+  cluster:
+    name: postgres-ha
+  
+  instances: 2
+  
+  # Read-Only pooler (cho read replicas)
+  type: ro
+  
+  pgbouncer:
+    poolMode: transaction
+    
+    parameters:
+      max_client_conn: "500"
+      default_pool_size: "25"
+      reserve_pool_size: "5"
+      min_pool_size: "5"
+      max_db_connections: "50"
+      server_idle_timeout: "600"
+      server_lifetime: "3600"
+  
+  template:
+    metadata:
+      labels:
+        app: postgres-pooler
+        type: ro
+    spec:
+      containers:
+        - name: pgbouncer
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
